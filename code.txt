@@ -1,0 +1,107 @@
+---Task1------------
+CREATE SCHEMA pandemic;
+USE pandemic;
+
+LOAD DATA LOCAL INFILE 'C:\\Users\\ADMIN\\Downloads\\infectious_cases.csv' 
+INTO TABLE infections 
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(Entity, @vcode, Year, @yaws, @polio, @guinea, @rabies, @malaria, @HIV, @tuberculosis, @smallpox, @cholera)
+SET 
+Code = NULLIF(@vcode, ''),
+Number_yaws = NULLIF(@yaws, ''),
+polio_cases = NULLIF(@polio, ''),
+cases_guinea_worm = NULLIF(@guinea, ''),
+ Number_rabies = NULLIF(@rabies, ''),
+Number_malaria = NULLIF(@malaria, ''),
+Number_hiv = NULLIF(@HIV, ''),
+Number_tuberculosis = NULLIF(@tuberculosis, ''),
+Number_smallpox = NULLIF(@smallpox, ''),
+Number_cholera_cases = NULLIF(@cholera, '');
+
+select count(*) from infections;
+
+---Task2------------
+
+CREATE TABLE countries (
+country_code varchar(10),
+country_name varchar(100)
+)
+
+INSERT INTO countries (country_code,country_name)
+WITH numbered_regions AS (
+    SELECT 
+        Entity, 
+        -- Creates 01, 02, 03... based on alphabetical order of the Entity name
+        LPAD(ROW_NUMBER() OVER (ORDER BY Entity), 2, '0') as region_num
+    FROM (SELECT DISTINCT Entity FROM infections WHERE Code IS NULL OR Code = '') as regions
+)
+-- Part 1: Insert real countries that already have a Code
+SELECT DISTINCT Code, Entity 
+FROM infections 
+WHERE Code IS NOT NULL AND Code != ''
+
+UNION ALL
+
+-- Part 2: Insert regions with your new R01, R02 format
+SELECT 
+    CONCAT('R', region_num), 
+    Entity 
+FROM numbered_regions;
+
+CREATE TABLE infectious_cases AS
+SELECT 
+    c.country_code AS Code, -- pull created codes
+    i.Year, 
+    i.Number_yaws, 
+    i.polio_cases, 
+    i.cases_guinea_worm, 
+    i.Number_rabies, 
+    i.Number_malaria, 
+    i.Number_hiv, 
+    i.Number_tuberculosis, 
+    i.Number_smallpox, 
+    i.Number_cholera_cases
+FROM infections i
+JOIN countries c ON i.Entity = c.country_name;
+
+
+---Task3------------
+
+select Code, min(Number_rabies) as min_rub, max(Number_rabies) as max_rub, 
+avg(Number_rabies) as avg_rub, sum(Number_rabies) as sum_rub
+from infectious_cases
+group by Code
+having min_rub is not null
+order by avg_rub desc
+limit 10;
+
+---Task4------------
+
+select Code, year, makedate(year,1) as begin_year, curdate() as date_today, 
+timestampdiff(year,makedate(year,1),curdate()) as diff
+from infectious_cases;  
+
+---Task5------------
+
+DELIMITER //
+
+CREATE FUNCTION Create_diff(input_year INT)
+RETURNS INT
+DETERMINISTIC 
+NO SQL
+BEGIN
+    DECLARE result INT;
+    SET result = timestampdiff(year,makedate(input_year,1),curdate());
+    RETURN result;
+END //
+
+DELIMITER ;
+
+
+select Code, year, Create_diff(year) as diff_year
+from infectious_cases;
+
+
